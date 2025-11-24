@@ -263,12 +263,15 @@ class EnhancedStockAnalyzer(BaseStockAnalyzer):
                 scores['rsi_score'] -= 1.0  # 超买警示
         
         # 5. MACD评分 (2.5分) - 仅辅助
-        if pd.notna(row['MACD']) and pd.notna(row['MACD_signal']):
-            if row['MACD'] > row['MACD_signal'] and row['MACD'] > 0:
+        # 兼容两种命名: 'MACD_signal' (增强版) 或 'Signal' (基础版)
+        macd_signal = row.get('MACD_signal', row.get('Signal'))
+
+        if pd.notna(row.get('MACD')) and pd.notna(macd_signal):
+            if row['MACD'] > macd_signal and row['MACD'] > 0:
                 scores['macd_score'] += 2.5
-            elif row['MACD'] > row['MACD_signal']:
+            elif row['MACD'] > macd_signal:
                 scores['macd_score'] += 1.5
-            elif row['MACD'] < row['MACD_signal']:
+            elif row['MACD'] < macd_signal:
                 scores['macd_score'] -= 1.0
         
         # 计算技术面总分
