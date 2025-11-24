@@ -45,6 +45,15 @@ except ImportError as e:
     print(f"⚠️ 警告：無法導入增強版模組 - {e}")
     ENHANCED_MODULES_AVAILABLE = False
 
+# 導入回測模組
+try:
+    from backtesting_engine import BacktestingEngine
+    BACKTEST_AVAILABLE = True
+    print("✅ 回測模組載入成功")
+except ImportError as e:
+    print(f"⚠️ 警告：無法導入回測模組 - {e}")
+    BACKTEST_AVAILABLE = False
+
 # ====================================
 # Flask 應用初始化
 # ====================================
@@ -392,12 +401,15 @@ def health_check():
     """健康檢查"""
     status = {
         'status': 'running',
+        'version': 'v4.1',
         'core_modules': CORE_MODULES_AVAILABLE,
         'enhanced_modules': ENHANCED_MODULES_AVAILABLE,
+        'backtest_module': BACKTEST_AVAILABLE,
         'features': {
             'basic_analysis': picker is not None,
             'enhanced_analysis': enhanced_picker is not None,
-            'data_management': manager is not None
+            'data_management': manager is not None,
+            'backtesting': BACKTEST_AVAILABLE
         }
     }
     return jsonify(format_response(True, '系統運行正常', status))
@@ -955,6 +967,202 @@ def download_all_listed():
         traceback.print_exc()
         return jsonify(format_response(False, f'下載失敗: {str(e)}')), 500
 
+@app.route('/api/backtest', methods=['POST'])
+def run_backtest():
+    """執行回測"""
+    try:
+        if not BACKTEST_AVAILABLE or not manager:
+            return jsonify(format_response(False, '回測系統未初始化')), 500
+
+        data = request.json
+        symbol = data.get('symbol', '').strip().upper()
+
+        if not symbol:
+            return jsonify(format_response(False, '請提供股票代碼')), 400
+
+        # 回測參數
+        initial_capital = data.get('initial_capital', 1000000)
+        position_size = data.get('position_size', 0.3)
+        stop_loss = data.get('stop_loss', -0.08)
+        take_profit = data.get('take_profit', 0.15)
+        rebalance_days = data.get('rebalance_days', 5)
+        strategy = data.get('strategy', 'enhanced')
+
+        print(f"\n📊 開始回測: {symbol}")
+        print(f"   策略: {strategy}")
+        print(f"   初始資金: ${initial_capital:,.0f}")
+        print(f"   倉位: {position_size*100:.0f}%")
+
+        # 載入數據
+        df = manager.load_stock_data(symbol)
+        if df is None or len(df) < 200:
+            return jsonify(format_response(False, f'數據不足，需要至少200筆交易數據')), 400
+
+        # 創建回測引擎
+        engine = BacktestingEngine(
+            initial_capital=initial_capital,
+            commission_rate=0.001425,
+            tax_rate=0.003,
+            slippage=0.001
+        )
+
+        # 執行回測
+        results = engine.run_backtest(
+            df=df,
+            strategy=strategy,
+            position_size=position_size,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            rebalance_days=rebalance_days
+        )
+
+        # 格式化交易記錄
+        trades_formatted = []
+        for trade in results['trades']:
+            trades_formatted.append({
+                'entry_date': trade['entry_date'].strftime('%Y-%m-%d') if hasattr(trade['entry_date'], 'strftime') else str(trade['entry_date']),
+                'exit_date': trade['exit_date'].strftime('%Y-%m-%d') if hasattr(trade['exit_date'], 'strftime') else str(trade['exit_date']),
+                'entry_price': float(trade['entry_price']),
+                'exit_price': float(trade['exit_price']),
+                'shares': int(trade['shares']),
+                'profit': float(trade['profit']),
+                'profit_pct': float(trade['profit_pct']),
+                'days_held': int(trade['days_held']),
+                'exit_reason': trade['exit_reason']
+            })
+
+        # 格式化資金曲線
+        equity_curve_formatted = []
+        for eq in results['equity_curve'][-100:]:  # 只返回最後100個點
+            equity_curve_formatted.append({
+                'date': eq['date'].strftime('%Y-%m-%d') if hasattr(eq['date'], 'strftime') else str(eq['date']),
+                'equity': float(eq['equity']),
+                'capital': float(eq['capital']),
+                'position_value': float(eq['position_value'])
+            })
+
+        # 構建回應
+        response_data = {
+            'symbol': symbol,
+            'strategy': strategy,
+            'parameters': {
+                'initial_capital': initial_capital,
+                'position_size': position_size,
+                'stop_loss': stop_loss,
+                'take_profit': take_profit,
+                'rebalance_days': rebalance_days
+            },
+            'results': {
+                'initial_capital': float(results['initial_capital']),
+                'final_equity': float(results['final_equity']),
+                'total_return': float(results['total_return']),
+                'total_return_pct': float(results['total_return'] * 100)
+            },
+            'metrics': {
+                'total_trades': results['metrics']['total_trades'],
+                'winning_trades': results['metrics']['winning_trades'],
+                'losing_trades': results['metrics']['losing_trades'],
+                'win_rate': float(results['metrics']['win_rate']),
+                'avg_profit': float(results['metrics']['avg_profit']),
+                'avg_profit_pct': float(results['metrics']['avg_profit_pct']),
+                'max_profit': float(results['metrics']['max_profit']),
+                'max_loss': float(results['metrics']['max_loss']),
+                'profit_factor': float(results['metrics']['profit_factor']),
+                'sharpe_ratio': float(results['metrics']['sharpe_ratio']),
+                'max_drawdown': float(results['metrics']['max_drawdown']),
+                'avg_holding_days': float(results['metrics']['avg_holding_days'])
+            },
+            'trades': trades_formatted,
+            'equity_curve': equity_curve_formatted,
+            'data_period': {
+                'start': df['date'].iloc[0].strftime('%Y-%m-%d'),
+                'end': df['date'].iloc[-1].strftime('%Y-%m-%d'),
+                'total_days': len(df)
+            }
+        }
+
+        print(f"✅ 回測完成")
+        print(f"   總報酬: {results['total_return']*100:+.2f}%")
+        print(f"   交易次數: {results['metrics']['total_trades']}")
+        print(f"   勝率: {results['metrics']['win_rate']*100:.1f}%")
+
+        return jsonify(format_response(True, '回測完成', response_data))
+
+    except Exception as e:
+        print(f"❌ 回測錯誤: {str(e)}")
+        traceback.print_exc()
+        return jsonify(format_response(False, f'回測失敗: {str(e)}')), 500
+
+@app.route('/api/backtest_compare', methods=['POST'])
+def compare_parameters():
+    """比較不同參數的回測結果"""
+    try:
+        if not BACKTEST_AVAILABLE or not manager:
+            return jsonify(format_response(False, '回測系統未初始化')), 500
+
+        data = request.json
+        symbol = data.get('symbol', '').strip().upper()
+
+        if not symbol:
+            return jsonify(format_response(False, '請提供股票代碼')), 400
+
+        # 載入數據
+        df = manager.load_stock_data(symbol)
+        if df is None or len(df) < 200:
+            return jsonify(format_response(False, f'數據不足')), 400
+
+        print(f"\n📊 開始參數比較回測: {symbol}")
+
+        # 測試參數組合
+        param_sets = data.get('param_sets', [
+            {'position_size': 0.2, 'stop_loss': -0.05, 'take_profit': 0.10},
+            {'position_size': 0.3, 'stop_loss': -0.08, 'take_profit': 0.15},
+            {'position_size': 0.5, 'stop_loss': -0.10, 'take_profit': 0.20},
+        ])
+
+        results_comparison = []
+
+        for idx, params in enumerate(param_sets):
+            print(f"   測試參數組 {idx+1}/{len(param_sets)}: "
+                  f"倉位{params['position_size']*100:.0f}%, "
+                  f"停損{params['stop_loss']*100:.0f}%, "
+                  f"停利{params['take_profit']*100:.0f}%")
+
+            engine = BacktestingEngine(initial_capital=1000000)
+            results = engine.run_backtest(
+                df=df,
+                strategy='enhanced',
+                position_size=params['position_size'],
+                stop_loss=params['stop_loss'],
+                take_profit=params['take_profit']
+            )
+
+            results_comparison.append({
+                'parameters': params,
+                'total_return': float(results['total_return']),
+                'win_rate': float(results['metrics']['win_rate']),
+                'sharpe_ratio': float(results['metrics']['sharpe_ratio']),
+                'max_drawdown': float(results['metrics']['max_drawdown']),
+                'total_trades': results['metrics']['total_trades']
+            })
+
+        # 找出最佳參數
+        best_result = max(results_comparison, key=lambda x: x['sharpe_ratio'])
+
+        print(f"✅ 參數比較完成")
+        print(f"   最佳Sharpe: {best_result['sharpe_ratio']:.2f}")
+
+        return jsonify(format_response(True, '參數比較完成', {
+            'symbol': symbol,
+            'results': results_comparison,
+            'best_parameters': best_result['parameters']
+        }))
+
+    except Exception as e:
+        print(f"❌ 參數比較錯誤: {str(e)}")
+        traceback.print_exc()
+        return jsonify(format_response(False, f'參數比較失敗: {str(e)}')), 500
+
 # ====================================
 # 啟動服務器
 # ====================================
@@ -962,7 +1170,7 @@ def download_all_listed():
 if __name__ == '__main__':
     print("""
     ╔════════════════════════════════════════════════════════════════╗
-    ║          多市場智能選股系統 v4.0 Enhanced                    ║
+    ║          多市場智能選股系統 v4.1 Enhanced                    ║
     ║          Multi-Market Stock Picker Web Server                ║
     ╚════════════════════════════════════════════════════════════════╝
 
@@ -970,16 +1178,23 @@ if __name__ == '__main__':
 
     📡 API 端點：
     ✅ GET  /api/health              - 健康檢查
-    ✅ POST /api/download            - 下載股票數據 (NEW!)
-    ✅ GET  /api/local-stocks        - 本地股票列表 (NEW!)
+    ✅ POST /api/download            - 下載股票數據
+    ✅ GET  /api/local-stocks        - 本地股票列表
     ✅ POST /api/analyze             - 基礎版分析
     ✅ POST /api/analyze_enhanced    - 增強版分析
     ✅ POST /api/screen              - 股票篩選
     ✅ GET  /api/get_symbols         - 獲取股票清單
     ✅ GET  /api/categories          - 獲取分類
     ✅ POST /api/download_all_listed - 下載全部上市公司
+    ✅ POST /api/backtest            - 執行回測 (NEW!)
+    ✅ POST /api/backtest_compare    - 參數比較回測 (NEW!)
 
-    🎯 v4.0 新功能：
+    🎯 v4.1 新功能：
+    • 📈 回測系統 - 驗證策略實際表現
+    • 💰 交易成本計算 - 手續費、稅、滑價
+    • 🎯 風險管理 - 停損停利機制
+    • 📊 績效指標 - Sharpe比率、勝率、回撤
+    • 🔧 參數優化 - 自動比較最佳參數
     • 總體經濟分析（VIX、美元、利率）
     • AI輿情分析（新聞情緒）
     • 成交量與流動性指標
