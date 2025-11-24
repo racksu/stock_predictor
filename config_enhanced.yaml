@@ -1,0 +1,256 @@
+# 增强版智能选股系统配置文件
+# Enhanced Stock Picker Configuration
+
+# ========== API 配置 ==========
+api:
+  # FinMind API Token（可选，注册后获得）
+  # 免费版：300次/小时
+  # 会员版：600次/小时
+  # 注册网址：https://finmindtrade.com/
+  finmind_token: null  # 在这里填入你的token
+  
+  # API请求延迟（秒）
+  request_delay: 0.5
+  
+  # 请求重试次数
+  max_retries: 3
+
+# ========== 权重配置 ==========
+weights:
+  # 多因子权重分配（总和应为1.0）
+  # v4.0 更新：加入总体经济因子
+  technical: 0.35    # 技术面 35% (从40%调整)
+  market: 0.25       # 市场面 25% (法人，从30%调整)
+  chips: 0.25        # 筹码面 25% (融资融券，从30%调整)
+  macro: 0.15        # 总体经济 15% (NEW!)
+  
+  # 技术面内部权重（总和应为1.0）
+  technical_breakdown:
+    kd: 0.375        # KD指标 15% (占技术面40%的37.5%)
+    obv: 0.25        # OBV 10%
+    ma: 0.25         # MA 10%
+    rsi: 0.0625      # RSI 2.5%
+    macd: 0.0625     # MACD 2.5%
+  
+  # 市场面内部权重（总和应为1.0）
+  market_breakdown:
+    foreign: 0.333   # 外资 10% (占市场面30%的33.3%)
+    trust: 0.40      # 投信 12% (表现最优)
+    dealer: 0.167    # 自营商 5%
+    consensus: 0.10  # 共识 3%
+  
+  # 筹码面内部权重（总和应为1.0）
+  chips_breakdown:
+    margin_usage: 0.40    # 融资使用率 12%
+    main_force: 0.333     # 主力进出 10%
+    short_ratio: 0.167    # 券资比 5%
+    day_trade: 0.10       # 当冲比例 3%
+
+# ========== 技术指标参数 ==========
+indicators:
+  # KD指标参数（台股优化）
+  kd:
+    n: 9          # RSV周期
+    m1: 3         # K值平滑周期
+    m2: 3         # D值平滑周期
+    oversold: 20  # 超卖阈值
+    overbought: 80 # 超买阈值
+  
+  # MA参数
+  ma:
+    short: 10     # 短期均线（台股最优）
+    medium: 20    # 中期均线
+    long: 60      # 长期均线
+  
+  # RSI参数
+  rsi:
+    period: 14
+    oversold: 30
+    overbought: 70
+  
+  # MACD参数
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9
+  
+  # OBV均线参数
+  obv:
+    ma_short: 5
+    ma_medium: 10
+    ma_long: 20
+
+# ========== 策略配置 ==========
+strategy:
+  # 数据回溯天数
+  lookback_days: 365
+  
+  # 波段持有期间（天）
+  holding_period: 40  # 1-2个月波段
+  
+  # 风险管理
+  stop_loss: 0.08     # 8%止损
+  take_profit: 0.20   # 20%分批获利
+  trailing_stop: 0.05 # 5%移动止损
+  
+  # 信号阈值
+  strong_buy_threshold: 80    # 强烈看多 >= 80分
+  buy_threshold: 60           # 看多 >= 60分
+  neutral_threshold: 40       # 中性 40-60分
+  sell_threshold: 20          # 看空 <= 40分
+  strong_sell_threshold: 20   # 强烈看空 < 20分
+
+# ========== 仓位管理 ==========
+risk_management:
+  # 单一标的最大仓位
+  max_position_per_stock: 0.20  # 20%
+  
+  # 总仓位上限
+  max_total_position: 0.70      # 70%
+  
+  # 根据市场环境调整仓位
+  position_by_market:
+    bullish: 0.70      # 多头市场 70%
+    neutral: 0.50      # 盘整 50%
+    bearish: 0.30      # 空头市场 30%
+  
+  # 分批建仓
+  initial_position: 0.40  # 首次建仓40%
+  add_position: 0.30      # 加码30%
+  final_position: 0.30    # 最后30%
+
+# ========== 法人数据配置 ==========
+institutional:
+  # 法人连续买超天数阈值
+  consecutive_buy_days: 5
+  
+  # 法人净买超金额阈值（万元）
+  net_buy_threshold: 1000
+  
+  # 外资持股比例阈值
+  foreign_holding_threshold:
+    high: 0.20  # 20%以上为高
+    low: 0.05   # 5%以下为低
+
+# ========== 融资融券配置 ==========
+margin:
+  # 融资使用率阈值
+  usage_rate_threshold:
+    very_low: 30    # <30% 底部信号
+    low: 45
+    normal: 60
+    high: 70
+    very_high: 80   # >80% 顶部信号
+
+  # 券资比阈值
+  short_ratio_threshold:
+    low: 10    # <10% 看多力量强
+    normal: 20
+    high: 30   # >30% 看空力量强
+
+  # 当冲比例阈值
+  day_trade_threshold:
+    low: 5     # <5% 市场冷清
+    normal: 15
+    high: 20   # >20% 市场过热
+
+# ========== 总体经济配置 (NEW!) ==========
+macro_economic:
+  # 是否启用总体经济分析
+  enabled: true
+
+  # 数据回溯天数
+  lookback_days: 30
+
+  # VIX恐慌指数阈值
+  vix_threshold:
+    very_low: 15    # <15 极度平静
+    low: 20         # 15-20 低波动
+    normal: 30      # 20-30 正常
+    high: 40        # 30-40 恐慌
+    very_high: 40   # >40 极度恐慌
+
+  # 美元指数DXY阈值
+  dxy_threshold:
+    very_weak: 90   # <90 极度弱势
+    weak: 95
+    normal: 105
+    strong: 105     # >105 强势
+
+  # 10年期公债殖利率阈值
+  treasury_yield_threshold:
+    very_low: 2     # <2% 经济疑虑
+    low: 3
+    normal: 4
+    high: 5         # >5% 高利率环境
+
+  # 总体经济权重分配
+  macro_weights:
+    vix: 0.40       # VIX 40% (最直接影响)
+    dxy: 0.30       # 美元 30%
+    yield: 0.30     # 殖利率 30%
+
+# ========== 数据源配置 ==========
+data_sources:
+  # 优先级顺序
+  priority:
+    - finmind     # 优先使用FinMind
+    - yfinance    # 备用yfinance
+  
+  # 数据存储
+  cache:
+    enabled: true
+    directory: "./stock_data_cache"
+    expiry_hours: 24  # 缓存有效期
+
+# ========== 回测配置 ==========
+backtest:
+  # 初始资金
+  initial_capital: 1000000  # 100万
+  
+  # 交易成本
+  commission: 0.001425  # 手续费 0.1425%
+  tax: 0.003           # 证券交易税 0.3%
+  
+  # 滑点
+  slippage: 0.001      # 0.1%
+
+# ========== 输出配置 ==========
+output:
+  # 报告详细程度
+  verbosity: detailed  # minimal / normal / detailed
+  
+  # 保存结果
+  save_results: true
+  results_directory: "./analysis_results"
+  
+  # 图表设置
+  charts:
+    enabled: true
+    format: png  # png / pdf / svg
+    dpi: 300
+
+# ========== 日志配置 ==========
+logging:
+  level: INFO  # DEBUG / INFO / WARNING / ERROR
+  file: "./stock_picker.log"
+  console: true
+  
+# ========== 通知配置 ==========
+notifications:
+  enabled: false
+  
+  # Email通知（需配置SMTP）
+  email:
+    enabled: false
+    smtp_server: smtp.gmail.com
+    smtp_port: 587
+    sender: your_email@gmail.com
+    password: your_password
+    recipients:
+      - recipient1@gmail.com
+  
+  # Line通知（需Line Notify token）
+  line:
+    enabled: false
+    token: your_line_notify_token

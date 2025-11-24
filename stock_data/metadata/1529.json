@@ -1,0 +1,16 @@
+{
+  "symbol": "1529",
+  "market": "TW",
+  "last_update": "2025-11-23 15:19:57",
+  "rows": 486,
+  "start_date": "2023-11-21",
+  "end_date": "2025-11-21",
+  "columns": [
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume"
+  ]
+}
