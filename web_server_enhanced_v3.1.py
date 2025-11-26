@@ -430,11 +430,32 @@ def analyze_stock():
 
         print(f"\n📊 開始分析: {symbol} (基礎版)")
 
-        # 下載數據
-        df = manager.download_stock_data(symbol, period='2y')
+        # 優先使用本地數據,如果沒有或太舊則重新下載
+        df = manager.load_stock_data(symbol)
 
+        # 檢查數據是否需要更新
+        need_update = False
         if df is None or len(df) < 200:
-            return jsonify(format_response(False, f'無法獲取 {symbol} 的數據或數據不足')), 404
+            need_update = True
+        else:
+            # 檢查數據是否過期 (超過1天)
+            from datetime import datetime, timedelta
+            latest_date = df['date'].iloc[-1]
+            if isinstance(latest_date, pd.Timestamp):
+                days_old = (datetime.now() - latest_date).days
+                if days_old > 1:
+                    need_update = True
+                    print(f"   本地數據已過期 {days_old} 天，重新下載...")
+
+        # 如果需要更新，下載最新數據
+        if need_update:
+            print(f"   下載最新數據...")
+            df = manager.download_stock_data(symbol, period='2y')
+
+            if df is None or len(df) < 200:
+                return jsonify(format_response(False, f'無法獲取 {symbol} 的數據或數據不足')), 404
+        else:
+            print(f"   使用本地數據 (最新日期: {latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date)})")
 
         # 執行分析
         analysis = picker.analyze_stock(symbol, df, strategy)
@@ -516,6 +537,9 @@ def screen_stocks():
         data = request.json
 
         # 讀取所有篩選條件
+        # 數據更新選項
+        auto_update_data = data.get('auto_update_data', False)  # 是否自動更新過期數據
+
         # 基本篩選
         market = data.get('market', 'all')
         min_score = data.get('min_score', 0)
@@ -572,6 +596,19 @@ def screen_stocks():
         stocks_data = {}
         for symbol in symbols:
             df = manager.load_stock_data(symbol)
+
+            # 如果啟用自動更新,檢查數據是否過期
+            if auto_update_data and df is not None and len(df) >= 200:
+                latest_date = df['date'].iloc[-1]
+                if isinstance(latest_date, pd.Timestamp):
+                    from datetime import datetime
+                    days_old = (datetime.now() - latest_date).days
+                    if days_old > 1:
+                        print(f"   更新 {symbol} (過期 {days_old} 天)...")
+                        updated_df = manager.download_stock_data(symbol, period='2y')
+                        if updated_df is not None:
+                            df = updated_df
+
             if df is not None and len(df) >= 200:
                 stocks_data[symbol] = df
 
