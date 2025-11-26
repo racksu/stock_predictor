@@ -446,7 +446,9 @@ def analyze_stock():
             from datetime import datetime, timedelta
             latest_date = df['date'].iloc[-1]
             if isinstance(latest_date, pd.Timestamp):
-                days_old = (datetime.now() - latest_date).days
+                # Convert to timezone-naive for comparison
+                latest_date_naive = latest_date.tz_localize(None) if latest_date.tz is not None else latest_date
+                days_old = (datetime.now() - latest_date_naive).days
                 if days_old > 1:
                     need_update = True
                     print(f"   本地數據已過期 {days_old} 天，重新下載...")
@@ -609,7 +611,9 @@ def screen_stocks():
                 latest_date = df['date'].iloc[-1]
                 if isinstance(latest_date, pd.Timestamp):
                     from datetime import datetime
-                    days_old = (datetime.now() - latest_date).days
+                    # Convert to timezone-naive for comparison
+                    latest_date_naive = latest_date.tz_localize(None) if latest_date.tz is not None else latest_date
+                    days_old = (datetime.now() - latest_date_naive).days
                     if days_old > 1:
                         print(f"   更新 {symbol} (過期 {days_old} 天)...")
                         updated_df = manager.download_stock_data(symbol, period='2y')
