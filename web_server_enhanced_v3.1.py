@@ -435,8 +435,12 @@ def analyze_stock():
 
         # 檢查數據是否需要更新
         need_update = False
-        if df is None or len(df) < 200:
+        if df is None:
             need_update = True
+            print(f"   本地無數據，需要下載...")
+        elif len(df) < 200:
+            need_update = True
+            print(f"   本地數據不足 ({len(df)} 筆)，需要下載...")
         else:
             # 檢查數據是否過期 (超過1天)
             from datetime import datetime, timedelta
@@ -446,16 +450,19 @@ def analyze_stock():
                 if days_old > 1:
                     need_update = True
                     print(f"   本地數據已過期 {days_old} 天，重新下載...")
+                else:
+                    print(f"   使用本地數據 (最新日期: {latest_date.strftime('%Y-%m-%d')}, {days_old} 天前)")
+            else:
+                print(f"   使用本地數據 (最新日期: {str(latest_date)})")
 
         # 如果需要更新，下載最新數據
         if need_update:
-            print(f"   下載最新數據...")
             df = manager.download_stock_data(symbol, period='2y')
 
             if df is None or len(df) < 200:
                 return jsonify(format_response(False, f'無法獲取 {symbol} 的數據或數據不足')), 404
-        else:
-            print(f"   使用本地數據 (最新日期: {latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date)})")
+            else:
+                print(f"   ✓ 下載完成: {len(df)} 筆數據")
 
         # 執行分析
         analysis = picker.analyze_stock(symbol, df, strategy)
