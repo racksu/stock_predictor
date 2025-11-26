@@ -1,0 +1,27 @@
+# Claude Code settings with sensitive tokens
+.claude/settings.local.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Data files (optional - uncomment if you don't want to track stock data)
+# stock_data/
+
+# Test outputs
+analysis_report_*.txt
+backtest_*.json
+
+# OS
+.DS_Store
+Thumbs.db
